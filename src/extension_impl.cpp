@@ -124,8 +124,8 @@ public:
                   isDenseMode(false),
                   valid(true) {}
 
-    Extension(int lgK) : lgK(std::max(MIN_LG_K, std::min(MAX_LG_K, lgK))),
-                         k(1 << this->lgK),
+    Extension(int lgK) : lgK(std::clamp(lgK, MIN_LG_K, MAX_LG_K)),
+                     k(1 << this->lgK),
                          buckets(k, 0),
                          numNonZero(0),
                          isDenseMode(false),
