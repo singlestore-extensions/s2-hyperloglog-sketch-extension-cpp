@@ -5,6 +5,7 @@
 #include <sstream>
 #include <cstring>
 #include <limits>
+#include <wasm_simd128.h>
 #include <extension.h>
 
 const int DEFAULT_LG_K = 12;
@@ -26,6 +27,8 @@ private:
     static const uint8_t FAMILY_BYTE;
     static const uint8_t COMPACT_FLAG_MASK;
     static const uint8_t FULL_SIZE_FLAG_MASK;
+
+    static const double invPow2Table[64];
 
     static void packBits(const std::vector<uint8_t>& input, std::vector<uint8_t>& output,
                          size_t startIdx, size_t numItems, int srcBits) {
@@ -177,14 +180,38 @@ public:
     double estimate() const {
         double sum = 0.0;
         int zeros = 0;
-        for (int i = 0; i < k; ++i) {
-            uint8_t val = buckets[i];
+        int i = 0;
+        const int vectorSize = 16;
+        int limit = k - (k % vectorSize);
+        const uint8_t* bucketPtr = buckets.data();
+
+        for (; i < limit; i += vectorSize) {
+            v128_t vals = wasm_v128_load(&bucketPtr[i]);
+
+            v128_t zero_vec = wasm_i8x16_splat(0);
+            v128_t cmp_result = wasm_i8x16_eq(vals, zero_vec);
+
+            uint16_t mask = wasm_i8x16_bitmask(cmp_result);
+            zeros += __builtin_popcount(mask);
+
+            uint8_t valArray[vectorSize];
+            wasm_v128_store(valArray, vals);
+
+            for (int j = 0; j < vectorSize; ++j) {
+                uint8_t val = valArray[j];
+                sum += invPow2Table[val];
+            }
+        }
+
+        for (; i < k; ++i) {
+            uint8_t val = bucketPtr[i];
             if (val == 0) {
                 zeros++;
             }
-            sum += 1.0 / (1ULL << val);
+            sum += invPow2Table[val];
         }
 
+        double estimate_value;
         double alpha;
         switch (k) {
             case 16: alpha = 0.673; break;
@@ -192,19 +219,17 @@ public:
             case 64: alpha = 0.709; break;
             default: alpha = 0.7213 / (1.0 + 1.079 / k); break;
         }
+        estimate_value = alpha * k * k / sum;
 
-        double estimate = alpha * k * k / sum;
-
-        if (estimate <= 2.5 * k) {
+        if (estimate_value <= 2.5 * k) {
             if (zeros != 0) {
-                estimate = k * log(static_cast<double>(k) / zeros);
+                estimate_value = k * log(static_cast<double>(k) / zeros);
             }
-        }
-        else if (estimate > (1.0 / 30.0) * (1ULL << 32)) {
-            estimate = -(1ULL << 32) * log(1.0 - (estimate / (1ULL << 32)));
+        } else if (estimate_value > (1.0 / 30.0) * (1ULL << 32)) {
+            estimate_value = -(1ULL << 32) * log(1.0 - (estimate_value / (1ULL << 32)));
         }
 
-        return estimate;
+        return estimate_value;
     }
 
     static void writeVarInt(std::vector<uint8_t>& buffer, uint32_t value) {
@@ -433,6 +458,73 @@ const uint8_t Extension::SER_VER_BYTE = 1;
 const uint8_t Extension::FAMILY_BYTE = 1;
 const uint8_t Extension::COMPACT_FLAG_MASK = 8;
 const uint8_t Extension::FULL_SIZE_FLAG_MASK = 32;
+
+const double Extension::invPow2Table[64] = {
+    1.0,
+    0.5,
+    0.25,
+    0.125,
+    0.0625,
+    0.03125,
+    0.015625,
+    0.0078125,
+    0.00390625,
+    0.001953125,
+    0.0009765625,
+    0.00048828125,
+    0.000244140625,
+    0.0001220703125,
+    6.103515625e-05,
+    3.0517578125e-05,
+    1.52587890625e-05,
+    7.62939453125e-06,
+    3.814697265625e-06,
+    1.9073486328125e-06,
+    9.5367431640625e-07,
+    4.76837158203125e-07,
+    2.384185791015625e-07,
+    1.1920928955078125e-07,
+    5.960464477539063e-08,
+    2.980232238769531e-08,
+    1.490116119384766e-08,
+    7.450580596923828e-09,
+    3.725290298461914e-09,
+    1.862645149230957e-09,
+    9.313225746154785e-10,
+    4.656612873077393e-10,
+    2.328306436538696e-10,
+    1.164153218269348e-10,
+    5.820766091346741e-11,
+    2.910383045673370e-11,
+    1.455191522836685e-11,
+    7.275957614183426e-12,
+    3.637978807091713e-12,
+    1.818989403545857e-12,
+    9.094947017729282e-13,
+    4.547473508864641e-13,
+    2.2737367544323206e-13,
+    1.1368683772161603e-13,
+    5.684341886080802e-14,
+    2.842170943040401e-14,
+    1.4210854715202004e-14,
+    7.105427357601002e-15,
+    3.552713678800501e-15,
+    1.7763568394002505e-15,
+    8.881784197001252e-16,
+    4.440892098500626e-16,
+    2.220446049250313e-16,
+    1.1102230246251565e-16,
+    5.551115123125783e-17,
+    2.7755575615628914e-17,
+    1.3877787807814457e-17,
+    6.938893903907228e-18,
+    3.469446951953614e-18,
+    1.734723475976807e-18,
+    8.673617379884035e-19,
+    4.336808689942018e-19,
+    2.168404344971009e-19,
+    1.0842021724855044e-19,
+};
 
 extern "C" {
     extension_state_t extension_hll_empty() {
