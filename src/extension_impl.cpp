@@ -27,8 +27,8 @@ private:
     static const uint8_t COMPACT_FLAG_MASK;
     static const uint8_t FULL_SIZE_FLAG_MASK;
 
-    static void packBits(const std::vector<uint8_t>& input, std::vector<uint8_t>& output, 
-                        size_t startIdx, size_t numItems, int srcBits) {
+    static void packBits(const std::vector<uint8_t>& input, std::vector<uint8_t>& output,
+                         size_t startIdx, size_t numItems, int srcBits) {
         int dstBitPos = 0;
         size_t dstBytePos = startIdx;
 
@@ -51,7 +51,7 @@ private:
     }
 
     static void unpackBits(const std::vector<uint8_t>& input, std::vector<uint8_t>& output,
-                        size_t startIdx, size_t numItems, int dstBits) {
+                           size_t startIdx, size_t numItems, int dstBits) {
         size_t srcBytePos = startIdx;
         int bitsInAccumulator = 0;
         uint32_t accumulator = 0;
@@ -102,7 +102,7 @@ public:
                   valid(true) {}
 
     Extension(int lgK) : lgK(std::clamp(lgK, MIN_LG_K, MAX_LG_K)),
-                     k(1 << this->lgK),
+                         k(1 << this->lgK),
                          buckets(k, 0),
                          numNonZero(0),
                          isDenseMode(false),
@@ -161,6 +161,9 @@ public:
     }
 
     void update(const uint8_t* key, size_t len) {
+        if (key == nullptr || len == 0) {
+            return;
+        }
         updateWithHash(hash(key, len));
     }
 
@@ -273,7 +276,7 @@ public:
 
         if (!isDenseMode) {
             writeVarInt(result, static_cast<uint32_t>(numNonZero));
-            
+
             std::vector<uint32_t> pairs;
             for (int i = 0; i < k; ++i) {
                 if (buckets[i] != 0) {
@@ -281,9 +284,9 @@ public:
                     pairs.push_back(pair);
                 }
             }
-            
+
             std::sort(pairs.begin(), pairs.end());
-            
+
             for (uint32_t pair : pairs) {
                 writeVarInt(result, pair);
             }
@@ -312,8 +315,8 @@ public:
         uint8_t family = data[offset++];
         uint8_t flags = data[offset++];
         int lgK = data[offset++];
-        
-        if (preambleInts != PREAMBLE_INTS_BYTE || serVer != SER_VER_BYTE || 
+
+        if (preambleInts != PREAMBLE_INTS_BYTE || serVer != SER_VER_BYTE ||
             family != FAMILY_BYTE || lgK < MIN_LG_K || lgK > MAX_LG_K) {
             hll.valid = false;
             return hll;
@@ -391,6 +394,8 @@ public:
     }
 
     void merge(const Extension& other) {
+        if (!other.valid) return;
+
         if (lgK != other.lgK) return;
 
         if (!isDenseMode && !other.isDenseMode) {
@@ -511,7 +516,7 @@ extern "C" {
     }
 
     double extension_hll_cardinality(extension_list_u8_t* data) {
-        if (data == nullptr || data->len == 0 || data->ptr == nullptr) {
+        if (data == nullptr || data->ptr == nullptr || data->len == 0) {
             return 0.0;
         }
         std::vector<uint8_t> vec(data->ptr, data->ptr + data->len);
@@ -529,11 +534,23 @@ extern "C" {
     void extension_hll_union(extension_list_u8_t* left, extension_list_u8_t* right, extension_list_u8_t* ret0) {
         if (left == nullptr || right == nullptr || ret0 == nullptr) return;
 
+        if (left->ptr == nullptr || left->len == 0 || right->ptr == nullptr || right->len == 0) {
+            ret0->ptr = nullptr;
+            ret0->len = 0;
+            return;
+        }
+
         std::vector<uint8_t> vec_left(left->ptr, left->ptr + left->len);
         std::vector<uint8_t> vec_right(right->ptr, right->ptr + right->len);
-        
+
         Extension hll_left = Extension::deserialize(vec_left);
         Extension hll_right = Extension::deserialize(vec_right);
+
+        if (!hll_left.isValid() || !hll_right.isValid()) {
+            ret0->ptr = nullptr;
+            ret0->len = 0;
+            return;
+        }
 
         hll_left.merge(hll_right);
 
@@ -548,10 +565,22 @@ extern "C" {
     }
 
     void extension_hll_print(extension_list_u8_t* data, extension_string_t* ret0) {
-        if (data == nullptr || ret0 == nullptr) return;
+        if (data == nullptr || data->ptr == nullptr || data->len == 0 || ret0 == nullptr) {
+            if (ret0) {
+                ret0->ptr = nullptr;
+                ret0->len = 0;
+            }
+            return;
+        }
 
         std::vector<uint8_t> vec(data->ptr, data->ptr + data->len);
         Extension hll = Extension::deserialize(vec);
+
+        if (!hll.isValid()) {
+            ret0->ptr = nullptr;
+            ret0->len = 0;
+            return;
+        }
 
         std::string result = hll.toString();
         ret0->ptr = (char*)malloc(result.size() + 1);
@@ -564,10 +593,10 @@ extern "C" {
     }
 
     extension_state_t extension_hll_union_agg(extension_state_t state, extension_list_u8_t* input) {
-        Extension* hll_state = reinterpret_cast<Extension*>(state);
-        if (input == nullptr || input->len == 0 || input->ptr == nullptr) {
+        if (input == nullptr || input->ptr == nullptr || input->len == 0) {
             return state;
         }
+        Extension* hll_state = reinterpret_cast<Extension*>(state);
         Extension hll_input = Extension::deserialize(
             std::vector<uint8_t>(input->ptr, input->ptr + input->len));
         if (!hll_input.isValid()) {
@@ -617,7 +646,7 @@ extern "C" {
     }
 
     extension_state_t extension_hll_deserialize(extension_list_u8_t* data) {
-        if (data == nullptr || data->len == 0 || data->ptr == nullptr) {
+        if (data == nullptr || data->ptr == nullptr || data->len == 0) {
             return 0;
         }
         std::vector<uint8_t> vec(data->ptr, data->ptr + data->len);
