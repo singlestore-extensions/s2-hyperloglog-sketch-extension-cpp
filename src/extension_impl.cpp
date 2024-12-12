@@ -185,14 +185,7 @@ public:
     void updateWithHash(uint64_t hashValue) {
         int slotNo = hashValue >> (64 - lgK);
         uint64_t w = hashValue << lgK;
-        int rank;
-
-        if (w == 0) {
-            rank = (64 - lgK) + 1;
-        } else {
-            rank = __builtin_clzll(w) + 1;
-            if (rank > (64 - lgK)) rank = 64 - lgK;
-        }
+        int rank = std::min(static_cast<int>(__builtin_clzll(w) + 1), 64 - lgK + 1);
 
         uint32_t coupon = (slotNo << VALUE_BITS) | rank;
         couponUpdate(coupon);
