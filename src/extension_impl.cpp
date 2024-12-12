@@ -21,76 +21,53 @@ private:
     bool valid;
 
     static const int VALUE_BITS;
-    static const int HLL_BYTE_ARR_START;
     static const uint8_t PREAMBLE_INTS_BYTE;
     static const uint8_t SER_VER_BYTE;
     static const uint8_t FAMILY_BYTE;
-    static const uint8_t EMPTY_FLAG_MASK;
     static const uint8_t COMPACT_FLAG_MASK;
-    static const uint8_t OUT_OF_ORDER_FLAG_MASK;
     static const uint8_t FULL_SIZE_FLAG_MASK;
 
     static void packBits(const std::vector<uint8_t>& input, std::vector<uint8_t>& output, 
                         size_t startIdx, size_t numItems, int srcBits) {
-        int srcMask = (1 << srcBits) - 1;
         int dstBitPos = 0;
         size_t dstBytePos = startIdx;
 
-        for (size_t i = 0; i < numItems; i++) {
-            int value = input[i] & srcMask;
-            int bitsRemaining = srcBits;
+        uint32_t accumulator = 0;
+        int bitsInAccumulator = 0;
 
-            while (bitsRemaining > 0) {
-                int bitsAvailableInByte = 8 - dstBitPos;
-                int bitsToWrite = std::min(bitsAvailableInByte, bitsRemaining);
-                int shift = bitsRemaining - bitsToWrite;
+        for (size_t i = 0; i < numItems; ++i) {
+            accumulator = (accumulator << srcBits) | (input[i] & ((1 << srcBits) - 1));
+            bitsInAccumulator += srcBits;
 
-                int fragment = (value >> shift) & ((1 << bitsToWrite) - 1);
-                output[dstBytePos] |= (fragment << (bitsAvailableInByte - bitsToWrite));
-
-                bitsRemaining -= bitsToWrite;
-                dstBitPos += bitsToWrite;
-
-                if (dstBitPos == 8) {
-                    dstBitPos = 0;
-                    dstBytePos++;
-                }
+            while (bitsInAccumulator >= 8) {
+                bitsInAccumulator -= 8;
+                output[dstBytePos++] = (accumulator >> bitsInAccumulator) & 0xFF;
             }
+        }
+
+        if (bitsInAccumulator > 0) {
+            output[dstBytePos++] = (accumulator << (8 - bitsInAccumulator)) & 0xFF;
         }
     }
 
     static void unpackBits(const std::vector<uint8_t>& input, std::vector<uint8_t>& output,
                         size_t startIdx, size_t numItems, int dstBits) {
-        int srcBitPos = 0;
         size_t srcBytePos = startIdx;
+        int bitsInAccumulator = 0;
+        uint32_t accumulator = 0;
         int dstMask = (1 << dstBits) - 1;
 
-        for (size_t i = 0; i < numItems; i++) {
-            int value = 0;
-            int bitsNeeded = dstBits;
-
-            while (bitsNeeded > 0) {
+        for (size_t i = 0; i < numItems; ++i) {
+            while (bitsInAccumulator < dstBits) {
                 if (srcBytePos >= input.size()) {
                     output.clear();
                     return;
                 }
-                int bitsAvailable = 8 - srcBitPos;
-                int bitsToRead = std::min(bitsAvailable, bitsNeeded);
-
-                int fragment = (input[srcBytePos] >> (bitsAvailable - bitsToRead)) & 
-                            ((1 << bitsToRead) - 1);
-                value = (value << bitsToRead) | fragment;
-
-                bitsNeeded -= bitsToRead;
-                srcBitPos += bitsToRead;
-
-                if (srcBitPos == 8) {
-                    srcBitPos = 0;
-                    srcBytePos++;
-                }
+                accumulator = (accumulator << 8) | input[srcBytePos++];
+                bitsInAccumulator += 8;
             }
-
-            output[i] = value & dstMask;
+            bitsInAccumulator -= dstBits;
+            output[i] = (accumulator >> bitsInAccumulator) & dstMask;
         }
     }
 
@@ -130,14 +107,6 @@ public:
                          numNonZero(0),
                          isDenseMode(false),
                          valid(true) {}
-
-    Extension(const Extension& other) = default;
-
-    Extension(Extension&& other) noexcept = default;
-
-    Extension& operator=(const Extension& other) = default;
-
-    Extension& operator=(Extension&& other) noexcept = default;
 
     bool isValid() const { return valid; }
 
@@ -454,13 +423,10 @@ public:
 };
 
 const int Extension::VALUE_BITS = 7;
-const int Extension::HLL_BYTE_ARR_START = 40;
 const uint8_t Extension::PREAMBLE_INTS_BYTE = 8;
 const uint8_t Extension::SER_VER_BYTE = 1;
 const uint8_t Extension::FAMILY_BYTE = 1;
-const uint8_t Extension::EMPTY_FLAG_MASK = 4;
 const uint8_t Extension::COMPACT_FLAG_MASK = 8;
-const uint8_t Extension::OUT_OF_ORDER_FLAG_MASK = 16;
 const uint8_t Extension::FULL_SIZE_FLAG_MASK = 32;
 
 extern "C" {
