@@ -1,0 +1,35 @@
+type state = s32
+
+hll-cardinality: func(data: list<u8>) -> float64
+hll-cardinality-emptyisnull: func(data: list<u8>) -> float64
+
+hll-union: func(left: list<u8>, right: list<u8>) -> list<u8>
+hll-union-emptyisnull: func(left: list<u8>, right: list<u8>) -> list<u8>
+
+hll-hash: func(data: list<u8>) -> u64
+hll-hash-emptyisnull: func(data: list<u8>) -> u64
+
+hll-print: func(data: list<u8>) -> string
+hll-print-emptyisnull: func(data: list<u8>) -> string
+
+hll-empty: func() -> state
+
+hll-add: func(state: state, input: list<u8>) -> state
+hll-add-emptyisnull: func(state: state, input: list<u8>) -> state
+
+hll-add-hash: func(state: state, input: u64) -> state
+hll-add-hash-emptyisnull: func(state: state, input: u64) -> state
+
+hll-union-agg: func(state: state, input: list<u8>) -> state
+hll-union-agg-emptyisnull: func(state: state, input: list<u8>) -> state
+
+hll-union-merge: func(left: state, right: state) -> state
+
+hll-serialize: func(state: state) -> list<u8>
+hll-serialize-compact: func(state: state) -> list<u8>
+hll-deserialize: func(data: list<u8>) -> state
+
+hll-to-dense: func(state: state) -> state
+hll-is-dense: func(state: state) -> u32
+
+hll-is-sparse: func(state: state) -> u32

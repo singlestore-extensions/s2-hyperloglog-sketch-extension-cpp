@@ -1,0 +1,62 @@
+CREATE AGGREGATE hll_add_agg(LONGBLOB NOT NULL)
+RETURNS LONGBLOB NOT NULL
+WITH STATE HANDLE
+AS WASM FROM LOCAL INFILE "extension.wasm"
+WITH WIT FROM LOCAL INFILE "extension.wit"
+INITIALIZE WITH hll_empty
+ITERATE WITH hll_add
+MERGE WITH hll_union_merge
+TERMINATE WITH hll_serialize
+SERIALIZE WITH hll_serialize
+DESERIALIZE WITH hll_deserialize;
+
+CREATE AGGREGATE hll_add_agg_compact(LONGBLOB NOT NULL)
+RETURNS LONGBLOB NOT NULL
+WITH STATE HANDLE
+AS WASM FROM LOCAL INFILE "extension.wasm"
+WITH WIT FROM LOCAL INFILE "extension.wit"
+INITIALIZE WITH hll_empty
+ITERATE WITH hll_add
+MERGE WITH hll_union_merge
+TERMINATE WITH hll_serialize_compact
+SERIALIZE WITH hll_serialize_compact
+DESERIALIZE WITH hll_deserialize;
+
+CREATE AGGREGATE hll_union_agg(LONGBLOB NOT NULL)
+RETURNS LONGBLOB NOT NULL
+WITH STATE HANDLE
+AS WASM FROM LOCAL INFILE "extension.wasm"
+WITH WIT FROM LOCAL INFILE "extension.wit"
+INITIALIZE WITH hll_empty
+ITERATE WITH hll_union_agg
+MERGE WITH hll_union_merge
+TERMINATE WITH hll_serialize
+SERIALIZE WITH hll_serialize
+DESERIALIZE WITH hll_deserialize;
+
+CREATE AGGREGATE hll_union_agg_compact(LONGBLOB NOT NULL)
+RETURNS LONGBLOB NOT NULL
+WITH STATE HANDLE
+AS WASM FROM LOCAL INFILE "extension.wasm"
+WITH WIT FROM LOCAL INFILE "extension.wit"
+INITIALIZE WITH hll_empty
+ITERATE WITH hll_union_agg
+MERGE WITH hll_union_merge
+TERMINATE WITH hll_serialize_compact
+SERIALIZE WITH hll_serialize_compact
+DESERIALIZE WITH hll_deserialize;
+
+CREATE FUNCTION hll_cardinality
+AS WASM FROM LOCAL INFILE "extension.wasm"
+WITH WIT FROM LOCAL INFILE "extension.wit"
+USING EXPORT 'hll-cardinality';
+
+CREATE FUNCTION hll_print
+AS WASM FROM LOCAL INFILE "extension.wasm"
+WITH WIT FROM LOCAL INFILE "extension.wit"
+USING EXPORT 'hll-print';
+
+CREATE FUNCTION hll_union
+AS WASM FROM LOCAL INFILE "extension.wasm"
+WITH WIT FROM LOCAL INFILE "extension.wit"
+USING EXPORT 'hll-union';
