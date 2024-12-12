@@ -4,7 +4,7 @@
 
 ## Introduction
 
-This repository is intended to get you started quickly on building a new extension for SingleStoreDB.
+This repository provides HyperLogLog (HLL) sketch functionality for SingleStoreDB. HyperLogLog is a probabilistic data structure used for estimating the number of distinct elements in a dataset with a very small memory footprint.
 
 ## Contents
 This extension provides the following aggregates and functions:
