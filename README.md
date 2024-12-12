@@ -1,4 +1,4 @@
-# HyperLogLog Sketch
+# SingleStore HyperLogLog Sketch Extension (C++)
 
 **Attention**: The code in this repository is not fully tested, documented, or supported by SingleStore. Visit the [SingleStore Forums](https://www.singlestore.com/forum/) to ask questions about this repository.
 
